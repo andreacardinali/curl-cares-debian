@@ -7,11 +7,76 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
+  check:
+    name: Check available version
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: debian:trixie
+
+    outputs:
+      build_required: ${{ steps.version.outputs.build_required }}
+      debian_version: ${{ steps.version.outputs.debian_version }}
+      expected_version: ${{ steps.version.outputs.expected_version }}
+
+    steps:
+      - name: Check curl version
+        id: version
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          export DEBIAN_FRONTEND=noninteractive
+
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            gzip
+
+          DEBIAN_VERSION=$(apt-cache policy curl | awk '/Candidate:/ {print $2}')
+          EXPECTED_VERSION="${DEBIAN_VERSION}+cares1"
+
+          [[ -n "$DEBIAN_VERSION" && "$DEBIAN_VERSION" != "(none)" ]] || {
+            echo 'Unable to determine Debian curl version'
+            exit 1
+          }
+
+          PUBLISHED_VERSION=$(
+            curl -fsSL \
+              https://andreacardinali.github.io/curl-cares-debian/Packages.gz \
+              2>/dev/null |
+            gzip -dc 2>/dev/null |
+            awk '
+              $1 == "Package:" && $2 == "curl" { found=1; next }
+              found && $1 == "Version:" { print $2; exit }
+            '
+          ) || PUBLISHED_VERSION=""
+
+          echo "Debian version:    $DEBIAN_VERSION"
+          echo "Expected version:  $EXPECTED_VERSION"
+          echo "Published version: ${PUBLISHED_VERSION:-none}"
+
+          echo "debian_version=$DEBIAN_VERSION" >>"$GITHUB_OUTPUT"
+          echo "expected_version=$EXPECTED_VERSION" >>"$GITHUB_OUTPUT"
+
+          if [[ "$PUBLISHED_VERSION" == "$EXPECTED_VERSION" ]]; then
+            echo "build_required=false" >>"$GITHUB_OUTPUT"
+            echo 'Current Debian version is already published'
+          else
+            echo "build_required=true" >>"$GITHUB_OUTPUT"
+            echo 'New build required'
+          fi
+
   build:
+    name: Build curl with c-ares
+
+    needs: check
+    if: needs.check.outputs.build_required == 'true'
+
     runs-on: ubuntu-latest
 
     container:
@@ -27,15 +92,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build repository
+        shell: bash
         run: bash scripts/build.sh
 
       - name: Verify repository
+        shell: bash
         run: |
+          set -Eeuo pipefail
+
+          test -s /repo/Packages
           test -s /repo/Packages.gz
           test -s /repo/Release
           test -s /repo/InRelease
           test -s /repo/Release.gpg
           test -s /repo/curl-cares-debian.asc
+
+          test -n "$(find /repo -maxdepth 1 -name 'curl_*_amd64.deb' -print -quit)"
+          test -n "$(find /repo -maxdepth 1 -name 'libcurl4t64_*_amd64.deb' -print -quit)"
+
+          echo 'Repository contents:'
           ls -lh /repo
 
       - name: Configure Pages
@@ -47,7 +122,14 @@ jobs:
           path: /repo
 
   deploy:
-    needs: build
+    name: Deploy APT repository
+
+    needs:
+      - check
+      - build
+
+    if: needs.build.result == 'success'
+
     runs-on: ubuntu-latest
 
     permissions:
