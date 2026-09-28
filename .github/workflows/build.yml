@@ -17,17 +17,25 @@ jobs:
     container:
       image: debian:trixie
 
+    env:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Build packages
+      - name: Build repository
         run: bash scripts/build.sh
 
-      - name: Verify packages
+      - name: Verify repository
         run: |
-          ls -lh /repo
           test -s /repo/Packages.gz
+          test -s /repo/Release
+          test -s /repo/InRelease
+          test -s /repo/Release.gpg
+          test -s /repo/curl-cares-debian.asc
+          ls -lh /repo
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -41,13 +49,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     permissions:
       pages: write
       id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Deploy repository
