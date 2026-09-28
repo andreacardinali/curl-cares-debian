@@ -58,8 +58,8 @@ cp curl_*_*.deb /repo/
 cp libcurl4t64_*_*.deb /repo/
 
 log 'Creating APT package index'
-cd /
-dpkg-scanpackages repo /dev/null >repo/Packages
-gzip -9k repo/Packages
+cd /repo
+dpkg-scanpackages . /dev/null >Packages
+gzip -9k Packages
 
 log 'Build completed'
