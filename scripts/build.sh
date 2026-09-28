@@ -9,6 +9,7 @@ log(){
 
 [[ -n "${APT_GPG_PRIVATE_KEY:-}" ]] || { log 'Missing APT_GPG_PRIVATE_KEY'; exit 1; }
 [[ -n "${APT_GPG_KEY_ID:-}" ]] || { log 'Missing APT_GPG_KEY_ID'; exit 1; }
+[[ -n "${APT_GPG_PASSPHRASE:-}" ]] || { log 'Missing APT_GPG_PASSPHRASE'; exit 1; }
 
 log 'Enabling Debian source repositories'
 
@@ -90,12 +91,16 @@ apt-ftparchive \
 log 'Signing repository metadata'
 
 gpg --batch --yes \
+  --pinentry-mode loopback \
+  --passphrase "$APT_GPG_PASSPHRASE" \
   --local-user "$APT_GPG_KEY_ID" \
   --clearsign \
   --output InRelease \
   Release
 
 gpg --batch --yes \
+  --pinentry-mode loopback \
+  --passphrase "$APT_GPG_PASSPHRASE" \
   --local-user "$APT_GPG_KEY_ID" \
   --armor \
   --detach-sign \
