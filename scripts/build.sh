@@ -48,6 +48,14 @@ apt-get source curl
 
 cd curl-*
 
+DEB_VERSION=$(dpkg-parsechangelog -S Version)
+
+dch --local '+cares' \
+  --distribution trixie \
+  'Rebuild with c-ares resolver support'
+
+log "Building curl ${DEB_VERSION}+cares1"
+
 grep -q -- '--enable-threaded-resolver' debian/rules ||
   { log 'Unable to locate threaded resolver option'; exit 1; }
 
