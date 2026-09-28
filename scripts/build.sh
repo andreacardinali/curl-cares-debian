@@ -32,6 +32,8 @@ apt-get install -y --no-install-recommends \
 apt-get build-dep -y curl
 
 mkdir -p /build /repo
+chown _apt:root /build
+chmod 755 /build
 cd /build
 
 log 'Downloading Debian curl source'
